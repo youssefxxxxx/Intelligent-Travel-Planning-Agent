@@ -1,0 +1,47 @@
+# ===================
+# Fichiers d’environnement
+# ===================
+.env
+.env.*
+.venv/
+venv/
+
+# ===================
+# Cache et fichiers compilés Python
+# ===================
+__pycache__/
+*.pyc
+*.pyo
+
+# ===================
+# Virtualenv / dépendances Python
+# ===================
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+build/
+
+# ===================
+# Node / React (frontend)
+# ===================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+/public/build/
+
+# ===================
+# Logs et OS
+# ===================
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# ===================
+# IDEs / éditeurs
+# ===================
+.vscode/
+.idea/
+secrets/*.json
