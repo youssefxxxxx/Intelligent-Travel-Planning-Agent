@@ -1,5 +1,5 @@
 # ai/gemini.py
-
+# ------------------------------------------------------------------------------
 import os
 import textwrap
 import json
@@ -8,31 +8,30 @@ import google.generativeai as genai
 from core.models import TripRequest, Itinerary, ItineraryDay
 
 # ──────────────────────────────────────────────────────────────────────────────
-# On ne configure pas la clé à l’import, on la lit à la demande dans _get_model()
+# Helper: get a configured Gemini model (flash 1.5)
 # ──────────────────────────────────────────────────────────────────────────────
 def _get_model():
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY manquante ou vide.")
+        raise RuntimeError("Environment variable GEMINI_API_KEY is missing.")
     genai.configure(api_key=api_key)
     return genai.GenerativeModel("gemini-1.5-flash")
 
-
 # ──────────────────────────────────────────────────────────────────────────────
-# Prompt template pour génération d’itinéraire neuf
+# Prompt template – create a *new* itinerary
 # ──────────────────────────────────────────────────────────────────────────────
 _PROMPT_TEMPLATE = textwrap.dedent(
     """\
-    Vous êtes un agent de voyage IA. Voici la demande utilisateur :
-    - Ville : {city}
-    - Dates : {start} → {end}
-    - Budget total : {budget} €
-    - Point de départ : {origin}
+    You are an AI travel agent. The user's request:
+    - City: {city}
+    - Dates: {start} → {end}
+    - Total budget: {budget} €
+    - Departure city: {origin}
 
-    Données météo (par jour) :
+    Weather data (by day):
     {weather_block}
 
-    Propose un programme jour / soir adapté, format JSON :
+    Please suggest a realistic day-by-day plan in **JSON**:
     {{
       "days": [
         {{
@@ -47,16 +46,15 @@ _PROMPT_TEMPLATE = textwrap.dedent(
       "total_cost": NN,
       "chain_of_thought": "..."
     }}
-    - Respecte le budget.
-    - Si pluie → activités intérieures.
+
+    Constraints:
+    * Stay within budget.
+    * If the weather says “rain”, favour indoor activities.
     """
 )
 
-
 def build_prompt(req: TripRequest, weather_block: str) -> str:
-    """
-    Construit le prompt initial pour demander un itinéraire.
-    """
+    """Return the initial prompt string for Gemini."""
     return _PROMPT_TEMPLATE.format(
         city=req.city,
         start=req.start,
@@ -66,25 +64,24 @@ def build_prompt(req: TripRequest, weather_block: str) -> str:
         weather_block=weather_block,
     )
 
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Generate itinerary from scratch
+# ──────────────────────────────────────────────────────────────────────────────
 def generate_itinerary(prompt: str) -> Itinerary:
-    """
-    Envoie le prompt à Gemini, récupère le JSON en output, et le mappe sur un objet Itinerary.
-    """
     model = _get_model()
     resp = model.generate_content(prompt)
-    raw = resp.candidates[0].content.parts[0].text.strip("`json \n")
-    data = json.loads(raw)
+    raw_json = resp.candidates[0].content.parts[0].text.strip("`json \n")
+    data = json.loads(raw_json)
 
-    days = []
-    for d in data["days"]:
-        day_obj = ItineraryDay(
+    days = [
+        ItineraryDay(
             date=dt.date.fromisoformat(d["date"]),
             morning=d["morning"],
             afternoon=d["afternoon"],
             evening=d["evening"],
         )
-        days.append(day_obj)
+        for d in data["days"]
+    ]
 
     return Itinerary(
         days=days,
@@ -92,29 +89,29 @@ def generate_itinerary(prompt: str) -> Itinerary:
         chain_of_thought=data["chain_of_thought"],
     )
 
-
+# ──────────────────────────────────────────────────────────────────────────────
+# Modify an existing itinerary
+# ──────────────────────────────────────────────────────────────────────────────
 def modify_itinerary(current_itin: dict, change_request: str) -> Itinerary:
     """
-    Demande à Gemini de modifier un itinéraire existant (JSON), selon une consigne en langage naturel.
-    - current_itin : le dict JSON de l’itinéraire actuel (avec "days", "total_cost", "chain_of_thought", "meteo").
-    - change_request : texte libre expliquant la modification souhaitée.
-    Renvoie un nouvel Itinerary.
+    Ask Gemini to update an existing itinerary (current_itin) according to
+    change_request written in natural language. Returns a new Itinerary object.
     """
     model = _get_model()
-    # Construire le prompt pour la modification
-    base = (
-        "Vous êtes un agent de voyage IA. Voici l’itinéraire actuel (format JSON) :\n"
-        f"{json.dumps(current_itin, indent=2, ensure_ascii=False)}\n\n"
-        "L’utilisateur demande la modification suivante :\n"
-        f"{change_request}\n\n"
-        "Merci de renvoyer l’itinéraire COMPLET mis à jour au format JSON exactement identique "
-        "au même schéma (avec keys : days, total_cost, chain_of_thought)."
-    )
-    resp = model.generate_content(base)
-    raw = resp.candidates[0].content.parts[0].text.strip("`json \n")
-    data = json.loads(raw)
 
-    # Convertir en Itinerary
+    prompt = (
+        "You are an AI travel agent. Current itinerary (JSON):\n"
+        f"{json.dumps(current_itin, indent=2, ensure_ascii=False)}\n\n"
+        "The user requests this change:\n"
+        f"{change_request}\n\n"
+        "Please return the **full** updated itinerary in the exact same JSON "
+        'schema (keys: days, total_cost, chain_of_thought).'
+    )
+
+    resp = model.generate_content(prompt)
+    raw_json = resp.candidates[0].content.parts[0].text.strip("`json \n")
+    data = json.loads(raw_json)
+
     days = [
         ItineraryDay(
             date=dt.date.fromisoformat(d["date"]),

@@ -5,7 +5,7 @@ import datetime
 import uuid
 from dotenv import load_dotenv
 
-load_dotenv()  # ← DOIT précéder tout import dépendant de .env
+load_dotenv()  # ← Must precede any import depending on .env
 
 import streamlit as st
 import pandas as pd
@@ -17,12 +17,12 @@ from services import accommodation as asvc
 from ai import gemini
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 0. Configuration Streamlit
+# 0. Streamlit configuration
 # ──────────────────────────────────────────────────────────────────────────────
-st.set_page_config(page_title="Agent de Voyage IA", layout="wide")
+st.set_page_config(page_title="AI Travel Agent", layout="wide")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 1. Initialisation du session_state (valeurs par défaut)
+# 1. session_state initialisation (default values)
 # ──────────────────────────────────────────────────────────────────────────────
 defaults = {
     "itinerary": None,       # {"days":…, "total_cost":…, "chain_of_thought":…, "meteo":…}
@@ -30,61 +30,61 @@ defaults = {
     "workbook": None,        # {"local_file":…, "gsheet_url":…}
     "show_itinerary": False,
     "error_message": "",
-    "city_coords": None,     # tuple(lat, lon) de la ville de destination
-    "origin_coords": None,   # tuple(lat, lon) de la ville de départ
+    "city_coords": None,     # tuple(lat, lon) of destination city
+    "origin_coords": None,   # tuple(lat, lon) of origin city
 }
 for k, v in defaults.items():
     st.session_state.setdefault(k, v)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 2. Formulaire de saisie
+# 2. Input form
 # ──────────────────────────────────────────────────────────────────────────────
 with st.form("travel_form"):
-    st.markdown("## 🛫 Agent de Voyage Intelligent")
-    city_input   = st.text_input("Ville de destination",  "Barcelone", key="city")
-    origin_input = st.text_input("Ville de départ",       "Paris",     key="origin")
-    start_input  = st.date_input("Date de début", datetime.date(2025, 6, 2), key="start")
-    end_input    = st.date_input("Date de fin",  datetime.date(2025, 6, 5),  key="end")
+    st.markdown("## 🛫 Intelligent Travel Agent")
+    city_input   = st.text_input("Destination city",  "Barcelona", key="city")
+    origin_input = st.text_input("Origin city",       "Paris",     key="origin")
+    start_input  = st.date_input("Start date", datetime.date(2025, 6, 2), key="start")
+    end_input    = st.date_input("End date",  datetime.date(2025, 6, 5),  key="end")
     budget_input = st.number_input(
-        "Budget total (€)", 
-        min_value=0.0, 
+        "Total budget (€)",
+        min_value=0.0,
         value=300.0,
-        step=10.0, 
+        step=10.0,
         key="budget"
     )
-    email_input  = st.text_input("Adresse e-mail", "example@example.com", key="email")
-    submitted = st.form_submit_button("Générer l’itinéraire")
+    email_input  = st.text_input("Email address", "example@example.com", key="email")
+    submitted = st.form_submit_button("Generate itinerary")
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 3. À la soumission du formulaire
+# 3. On form submission
 # ──────────────────────────────────────────────────────────────────────────────
 if submitted:
-    # 3.1. Validation “dates” & champs obligatoires
+    # 3.1. Date validation & required fields
     if end_input < start_input:
-        st.session_state.error_message = "🛑 La date de fin doit être après la date de début."
+        st.session_state.error_message = "🛑 End date must be after start date."
     elif not (city_input and origin_input and email_input):
-        st.session_state.error_message = "🛑 Merci de remplir tous les champs obligatoires."
+        st.session_state.error_message = "🛑 Please fill in all required fields."
     else:
         st.session_state.error_message = ""
         try:
-            # 3.2. Géocodage des villes
-            st.info("⏳ Géocodage des villes…")
+            # 3.2. Geocode cities
+            st.info("⏳ Geocoding cities…")
             origin_latlon = gc.city_to_coords(origin_input)
             dest_latlon   = gc.city_to_coords(city_input)
             st.session_state.origin_coords = origin_latlon
             st.session_state.city_coords   = dest_latlon
-            st.success("✅ Géocodage OK.")
+            st.success("✅ Geocoding complete.")
 
-            # 3.3. Appel météo
-            st.info("📡 Récupération des données météo…")
+            # 3.3. Weather call
+            st.info("📡 Fetching weather data…")
             meteo_slices = wsvc.fetch_weather(city_input, start_input, end_input)
             wb_text = "\n".join(
                 f"- {m.date}: {m.description} ({m.temp_min}→{m.temp_max}°C)"
                 for m in meteo_slices
             )
-            st.success("✅ Météo récupérée.")
+            st.success("✅ Weather data retrieved.")
 
-            # 3.4. Construire TripRequest
+            # 3.4. Build TripRequest
             trip_req = TripRequest(
                 city=city_input,
                 origin=origin_input,
@@ -94,12 +94,12 @@ if submitted:
                 email=email_input,
             )
 
-            # 3.5. Génération d’itinéraire initial
-            st.info("🤖 Génération de l’itinéraire avec Gemini…")
+            # 3.5. Generate initial itinerary
+            st.info("🤖 Generating itinerary with Gemini…")
             itin_obj = gemini.generate_itinerary(gemini.build_prompt(trip_req, wb_text))
-            st.success("✅ Itinéraire généré.")
+            st.success("✅ Itinerary generated.")
 
-            # 3.6. Stockage en session (convertir dates → chaînes pour JSON)
+            # 3.6. Store in session (convert dates → strings for JSON)
             st.session_state.itinerary = {
                 "days": [
                     {
@@ -123,7 +123,7 @@ if submitted:
                 ],
             }
 
-            # 3.7. Hôtel factice (50 % du coût total)
+            # 3.7. Dummy hotel (50 % of total cost)
             st.session_state.hotel_dummy = {
                 "name": "Hotel Barceló Sants",
                 "total": round(itin_obj.total_cost * 0.5),
@@ -131,121 +131,121 @@ if submitted:
                 "check_out": end_input.isoformat(),
             }
 
-            # 3.8. Génération du classeur (XLSX + Sheets)
-            st.info("📑 Préparation du classeur Excel / Sheets…")
+            # 3.8. Workbook generation (XLSX + Sheets)
+            st.info("📑 Preparing Excel workbook / Sheets…")
             wb_info = ss.generate_workbook(
                 st.session_state.itinerary,
                 st.session_state.hotel_dummy,
                 email_input,
             )
             st.session_state.workbook = wb_info
-            st.success("✅ Classeur prêt.")
+            st.success("✅ Workbook ready.")
 
             st.session_state.show_itinerary = True
 
         except Exception as e:
-            st.session_state.error_message = f"⚠️ Erreur : {e}"
+            st.session_state.error_message = f"⚠️ Error: {e}"
             st.session_state.show_itinerary = False
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 4. Affiche le message d’erreur si besoin
+# 4. Display error message if needed
 # ──────────────────────────────────────────────────────────────────────────────
 if st.session_state.error_message:
     st.error(st.session_state.error_message)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# 5. Si l’itinéraire existe, on l’affiche + carte + calendrier + chat
+# 5. If itinerary exists, display it + map + calendar + chat
 # ──────────────────────────────────────────────────────────────────────────────
 if st.session_state.show_itinerary and st.session_state.itinerary:
     data = st.session_state.itinerary
 
-    # 5.1. Barre latérale pour choisir la vue
+    # 5.1. Sidebar view selector
     st.sidebar.markdown("## 🗺️ Options")
-    view_choice = st.sidebar.radio("Afficher :", ["Itinéraire", "Carte interactive"])
+    view_choice = st.sidebar.radio("Display:", ["Itinerary", "Interactive map"])
     st.sidebar.markdown("---")
 
     # ──────────────────────────────────────────────────────────────────────────
-    # 5.A Itinéraire textuel + Boutons Agenda + Chat de modification
+    # 5.A Textual itinerary + Agenda buttons + modification chat
     # ──────────────────────────────────────────────────────────────────────────
-    if view_choice == "Itinéraire":
-        st.subheader("🗓️ Itinéraire proposé")
+    if view_choice == "Itinerary":
+        st.subheader("🗓️ Proposed itinerary")
         for d in data["days"]:
             meteo_desc = next(
                 (m["description"] for m in data["meteo"] if m["date"] == d["date"]),
                 "N/A",
             )
-            with st.expander(f"{d['date']} — Météo : {meteo_desc}"):
-                st.markdown(f"**Matin :** {d['morning']}")
-                # Bouton Google Calendar “Matin”
-                gc_url_matin = (
+            with st.expander(f"{d['date']} — Weather: {meteo_desc}"):
+                st.markdown(f"**Morning:** {d['morning']}")
+                # Google Calendar button "Morning"
+                gc_url_morning = (
                     "https://calendar.google.com/calendar/render?action=TEMPLATE"
-                    f"&text=Matin+le+{d['date']}+à+{city_input}"
+                    f"&text=Morning+on+{d['date']}+in+{city_input}"
                     f"&dates={d['date'].replace('-','')}T090000Z/{d['date'].replace('-','')}T120000Z"
                     f"&details={d['morning']}"
                     f"&location={city_input.replace(' ', '+')}"
                 )
-                st.markdown(f"[➕ Ajouter Matin au Google Calendar]({gc_url_matin})")
+                st.markdown(f"[➕ Add Morning to Google Calendar]({gc_url_morning})")
 
                 st.markdown("---")
-                st.markdown(f"**Après-midi :** {d['afternoon']}")
-                # Bouton Google Calendar “Après-midi”
+                st.markdown(f"**Afternoon:** {d['afternoon']}")
+                # Google Calendar button "Afternoon"
                 gc_url_pm = (
                     "https://calendar.google.com/calendar/render?action=TEMPLATE"
-                    f"&text=Après-midi+le+{d['date']}+à+{city_input}"
+                    f"&text=Afternoon+on+{d['date']}+in+{city_input}"
                     f"&dates={d['date'].replace('-','')}T130000Z/{d['date'].replace('-','')}T170000Z"
                     f"&details={d['afternoon']}"
                     f"&location={city_input.replace(' ', '+')}"
                 )
-                st.markdown(f"[➕ Ajouter PM au Google Calendar]({gc_url_pm})")
+                st.markdown(f"[➕ Add Afternoon to Google Calendar]({gc_url_pm})")
 
                 st.markdown("---")
-                st.markdown(f"**Soir :** {d['evening']}")
-                # Bouton Google Calendar “Soir”
-                gc_url_soir = (
+                st.markdown(f"**Evening:** {d['evening']}")
+                # Google Calendar button "Evening"
+                gc_url_evening = (
                     "https://calendar.google.com/calendar/render?action=TEMPLATE"
-                    f"&text=Soir+le+{d['date']}+à+{city_input}"
+                    f"&text=Evening+on+{d['date']}+in+{city_input}"
                     f"&dates={d['date'].replace('-','')}T180000Z/{d['date'].replace('-','')}T210000Z"
                     f"&details={d['evening']}"
                     f"&location={city_input.replace(' ', '+')}"
                 )
-                st.markdown(f"[➕ Ajouter Soir au Google Calendar]({gc_url_soir})")
+                st.markdown(f"[➕ Add Evening to Google Calendar]({gc_url_evening})")
 
                 st.markdown("---")
 
-        st.write(f"**Coût total estimé :** {data['total_cost']} €  (Budget : {budget_input} €)")
+        st.write(f"**Estimated total cost:** {data['total_cost']} €  (Budget: {budget_input} €)")
 
-        with st.expander("🧠 Voir la Logique interne (CoT)"):
+        with st.expander("🧠 View internal logic (CoT)"):
             st.text(data["chain_of_thought"])
 
         # ──────────────────────────────────────────────────────────────────────
-        # 5.A.1. Section “Itinéraire au format tableur”
+        # 5.A.1. “Itinerary as spreadsheet” section
         # ──────────────────────────────────────────────────────────────────────
         st.markdown("---")
-        st.subheader("📑 Itinéraire au format tableur")
+        st.subheader("📑 Itinerary as spreadsheet")
         wb = st.session_state.workbook
         if wb:
             loc = wb["local_file"]
             with open(loc, "rb") as f:
                 st.download_button(
-                    "📥 Télécharger l’itinéraire (XLSX)",
+                    "📥 Download itinerary (XLSX)",
                     f,
                     file_name=os.path.basename(loc),
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
             if wb["gsheet_url"]:
-                st.markdown(f"[📄 Ouvrir dans Google Sheets]({wb['gsheet_url']})")
+                st.markdown(f"[📄 Open in Google Sheets]({wb['gsheet_url']})")
 
         # ──────────────────────────────────────────────────────────────────────
-        # 5.A.2. Section “Hôtel factice + envoi e-mail”
+        # 5.A.2. “Dummy hotel + email” section
         # ──────────────────────────────────────────────────────────────────────
         st.markdown("---")
-        st.subheader("🏨 Réservation d’hôtel factice")
+        st.subheader("🏨 Dummy hotel booking")
         hd = st.session_state.hotel_dummy
-        st.write(f"**Nom :** {hd['name']}")
-        st.write(f"**Prix total estimé :** {hd['total']} €")
-        st.write(f"**Dates :** {hd['check_in']} → {hd['check_out']}")
+        st.write(f"**Name:** {hd['name']}")
+        st.write(f"**Estimated total price:** {hd['total']} €")
+        st.write(f"**Dates:** {hd['check_in']} → {hd['check_out']}")
 
-        if st.button("📨 Envoyer l’e-mail de confirmation"):
+        if st.button("📨 Send confirmation email"):
             try:
                 asvc.send_confirmation_email(
                     email_input,
@@ -254,28 +254,28 @@ if st.session_state.show_itinerary and st.session_state.itinerary:
                     attachment_path=wb["local_file"],
                     gsheet_url=wb["gsheet_url"],
                 )
-                st.success("✉️ E-mail envoyé ! Consultez votre boîte.")
+                st.success("✉️ Email sent! Check your inbox.")
             except Exception as e:
-                st.error(f"❌ Échec de l’envoi : {e}")
+                st.error(f"❌ Failed to send: {e}")
 
         # ──────────────────────────────────────────────────────────────────────
-        # 5.A.3. Chatbot pour modifications interactives
+        # 5.A.3. Chatbot for interactive modifications
         # ──────────────────────────────────────────────────────────────────────
         st.markdown("---")
-        st.subheader("💬 Modifier l’itinéraire")
+        st.subheader("💬 Modify itinerary")
         with st.form("modify_form"):
             mod_request = st.text_area(
-                "Exemple : « Ajoute une visite de la cathédrale le 2 juin en fin d’après-midi. »",
+                'Example: "Add a visit to the cathedral on June 2 in late afternoon."',
                 key="mod_text",
                 height=100
             )
-            apply_mod = st.form_submit_button("Appliquer la modification")
+            apply_mod = st.form_submit_button("Apply modification")
         if apply_mod and mod_request:
             try:
-                st.info("🔄 Application de votre demande…")
+                st.info("🔄 Applying your request…")
                 new_itin_obj = gemini.modify_itinerary(data, mod_request)
 
-                # Met à jour directement session_state.itinerary
+                # Update session_state.itinerary directly
                 st.session_state.itinerary = {
                     "days": [
                         {
@@ -288,101 +288,60 @@ if st.session_state.show_itinerary and st.session_state.itinerary:
                     ],
                     "total_cost": new_itin_obj.total_cost,
                     "chain_of_thought": new_itin_obj.chain_of_thought,
-                    # On conserve l’ancienne météo
+                    # Keep existing weather
                     "meteo": data["meteo"],
                 }
                 st.session_state.show_itinerary = True
-                st.success("✅ Itinéraire mis à jour.")
-                # Le simple fait de modifier session_state relance le script
+                st.success("✅ Itinerary updated.")
+                # Modifying session_state automatically reruns the script
 
             except Exception as e:
-                st.error(f"❌ Impossible d’appliquer la modification : {e}")
+                st.error(f"❌ Unable to apply modification: {e}")
 
     # ─────────────────────────────────────────────────────────────────────────────────
-    # 5.B Carte interactive (tous les lieux)
-    # ─────────────────────────────────────────────────────────────────────────────────
-        # ─────────────────────────────────────────────────────────────────────────────────
-    # 5.B Carte interactive (tous les lieux précis, sans couvrir toute la ville)
+    # 5.B Interactive map (all locations)
     # ─────────────────────────────────────────────────────────────────────────────────
     else:
-        st.subheader("🗺️ Carte interactive de l’itinéraire")
+        st.subheader("🗺️ Interactive map")
 
-        # 1) On récupère origin & destination (uniquement pour centrer la carte)
         oc = st.session_state.origin_coords
         dc = st.session_state.city_coords
 
-        # 2) Géocoder chaque activité et construire une liste de points
-        activities_points = []
-        idx = 1  # compteur pour “J1”, “J2”, etc.
-
-        for day_info in st.session_state.itinerary["days"]:
-            for moment in ["morning", "afternoon", "evening"]:
-                text_activity = day_info[moment].strip()
-                if not text_activity:
-                    continue
-
-                # 2.A. Extraire la partie “lieu” de la phrase d’activité
-                place = text_activity
-                for prefix in ["Visite de ", "Visite du ", "Découverte de ", "Découverte du ",
-                               "Exploration de ", "Exploration du ", "Aller à ", "Aller au "]:
-                    if place.startswith(prefix):
-                        place = place[len(prefix):]
-                        break
-
-                # 2.B. Géocoder “lieu + ville” pour obtenir lat/lon
-                query = f"{place}, {city_input}"
-                try:
-                    lat, lon = gc.city_to_coords(query)
-                    activities_points.append({
-                        "lat": lat,
-                        "lon": lon,
-                        "label": f"J{idx} {moment.capitalize()}"
-                    })
-                except Exception:
-                    # Si Nominatim ne trouve pas, on n’ajoute pas ce point
-                    pass
-            idx += 1
-
-        # 3) Construire le DataFrame pour PyDeck
-        #    – On inclut ORIGINE (pour le point de départ) mais PAS la “Destination”,
-        #      afin de ne pas masquer tous les POI
         df_points = pd.DataFrame(
-            [{"lat": oc[0], "lon": oc[1], "label": "Origine"}] + activities_points
+            [
+                {"lat": oc[0], "lon": oc[1], "label": "Origin",      "color": [ 30,144,255]}, # blue
+                {"lat": dc[0], "lon": dc[1], "label": "Destination", "color": [200, 30,  0]}, # red
+            ]
         )
 
-        # 4) Créer la carte PyDeck
+        layers = [
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=df_points,
+                get_position=["lon", "lat"],
+                get_color="color",
+                get_radius=900,
+                pickable=True,
+            ),
+            pdk.Layer(
+                "TextLayer",
+                data=df_points,
+                get_position=["lon", "lat"],
+                get_text="label",
+                get_color=[0, 0, 0, 200],
+                get_size=16,
+                get_alignment_baseline="'bottom'",
+            ),
+        ]
+
         deck = pdk.Deck(
             map_style="mapbox://styles/mapbox/streets-v11",
             initial_view_state=pdk.ViewState(
                 latitude=(oc[0] + dc[0]) / 2,
                 longitude=(oc[1] + dc[1]) / 2,
-                zoom=10,    # on zoome davantage pour voir les POI de plus près
-                pitch=0,
+                zoom=5,
             ),
-            layers=[
-                # Cercle pour chaque point (Origine + POI)
-                pdk.Layer(
-                    "ScatterplotLayer",
-                    data=df_points,
-                    get_position=["lon", "lat"],
-                    get_color=[200, 30, 0, 200],
-                    get_radius=800,  # rayon en mètres : ~800 m pour un petit point
-                    pickable=True,
-                ),
-                # Texte (étiquette) pour chaque point
-                pdk.Layer(
-                    "TextLayer",
-                    data=df_points,
-                    get_position=["lon", "lat"],
-                    get_text="label",
-                    get_color=[0, 0, 0, 200],
-                    get_size=14,
-                    get_alignment_baseline="'bottom'",
-                ),
-            ],
+            layers=layers,
         )
         st.pydeck_chart(deck)
-        st.markdown(
-            "*🔍 Vous pouvez zoomer, déplacer la carte et cliquer sur un marqueur pour lire l’étiquette.*"
-        )
-
+        st.markdown("*🔍 Zoom and pan the map, click a marker to read its label.*")
