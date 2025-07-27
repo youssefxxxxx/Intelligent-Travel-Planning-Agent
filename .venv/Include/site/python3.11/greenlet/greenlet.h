@@ -1,4 +1,4 @@
-/* -*- indent-tabs-mode: nil; tab-width: 4; -*- */
+/* -*- indent-tabs-mode: nil; tab-width: 4;, -*- */
 
 /* Greenlet object interface */
 
