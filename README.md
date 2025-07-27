@@ -18,5 +18,3 @@ The **Intelligent Travel Planning Agent** is an AI-powered application designed 
 - **Weather API**: OpenWeatherMap
 - **Email Service**: SMTP (Gmail)
 - **Tools**: Visual Studio Code, Postman, Draw.io
-
-## Project Structure
